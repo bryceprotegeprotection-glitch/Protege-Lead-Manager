@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Settings — Lead Manager</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Settings</h1>
+
+    <section class="panel">
+      <h2>Sales Reps</h2>
+      <form id="rep-form">
+        <input id="rep-name" placeholder="Rep name" required />
+        <input id="rep-email" placeholder="Rep email (optional)" />
+        <button type="submit">Add Rep</button>
+      </form>
+      <ul id="rep-list" class="list"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Categories</h2>
+      <form id="cat-form">
+        <input id="cat-name" placeholder="Category name" required />
+        <button type="submit">Add Category</button>
+      </form>
+      <ul id="cat-list" class="list"></ul>
+    </section>
+
+    <section class="panel small">
+      <button id="request-notifs">Enable Notifications</button>
+      <button id="clear-data">Clear demo data</button>
+    </section>
+  </main>
+
+  <script type="module" src="settings-firebase.js"></script>
+  <script>
+    // Ensure firebase-messaging-sw.js is registered at the site root for background messages
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/firebase-messaging-sw.js').then(() => {
+        console.log('firebase-messaging-sw registered');
+      }).catch(err => console.error('SW register failed', err));
+    }
+  </script>
+</body>
+</html>
