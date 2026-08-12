@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protege Lead Manager</title>
+<!-- Firebase (free tier) — provides shared, multi-device storage for this app -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #0E1620;
+    --panel: #16202C;
+    --panel-2: #1C2733;
+    --border: #2A3A48;
+    --text: #EAF1F7;
+    --text-dim: #90A4B7;
+    --text-faint: #5D7186;
+    --protection: #3E8FD9;
+    --protection-dim: rgba(62,143,217,0.14);
+    --power: #F2A93C;
+    --power-dim: rgba(242,169,60,0.14);
+    --good: #45B884;
+    --good-dim: rgba(69,184,132,0.14);
+    --bad: #E15C4E;
+    --bad-dim: rgba(225,92,78,0.14);
+    --radius: 10px;
+    --shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,h2,h3, .display{
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    letter-spacing: -0.01em;
+  }
+  ::selection{ background: var(--power-dim); }
+
+  .app{ max-width: 1320px; margin: 0 auto; padding: 22px 24px 60px; }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 22px; gap: 16px; flex-wrap: wrap;
+  }
+  .brand{ display:flex; align-items:center; gap: 12px; }
+  .brand-mark{ width: 40px; height:40px; flex-shrink:0; }
+  .brand h1{ font-size: 19px; margin:0; font-weight:700; }
+  .brand p{ margin:2px 0 0; font-size:12px; color:var(--text-dim); }
+
+  .tabs{ display:flex; gap:4px; background:var(--panel); border:1px solid var(--border); border-radius: 999px; padding:4px; flex-wrap:wrap; }
+  .tab-btn{
+    border:none; background:transparent; color:var(--text-dim);
+    padding: 9px 16px; border-radius:999px; font-size:13.5px; font-weight:600;
+    cursor:pointer; font-family:inherit; transition: all .15s ease;
+  }
+  .tab-btn.active{ background: var(--text); color: #0E1620; }
+  .tab-btn:not(.active):hover{ color: var(--text); }
+
+  .view{ display:none; }
+  .view.active{ display:block; animation: fadein .2s ease; }
+  @keyframes fadein{ from{opacity:0; transform: translateY(4px);} to{opacity:1; transform:none;} }
+
+  /* ---------- Buttons / inputs ---------- */
+  button{ font-family:inherit; cursor:pointer; }
+  .btn{
+    background: var(--panel-2); color: var(--text); border:1px solid var(--border);
+    padding: 9px 16px; border-radius: 8px; font-size: 13.5px; font-weight:600;
+    display:inline-flex; align-items:center; gap:8px; transition: border-color .15s ease, background .15s ease;
+  }
+  .btn:hover{ border-color:#3D5266; background:#1F2C3A; }
+  .btn-primary{ background: var(--power); border-color: var(--power); color:#1A1204; }
+  .btn-primary:hover{ background:#FFBB57; border-color:#FFBB57; }
+  .btn-ghost{ background:transparent; border-color:transparent; color:var(--text-dim); padding:9px 12px;}
+  .btn-ghost:hover{ color:var(--text); background:var(--panel-2); }
+  .btn-danger{ background: var(--bad-dim); border-color: rgba(225,92,78,0.4); color:#FF9C8F; }
+  .btn-danger:hover{ background: rgba(225,92,78,0.28); }
+  .btn-sm{ padding:6px 11px; font-size:12.5px; border-radius:6px; }
+
+  input, select, textarea{
+    width:100%; background: var(--bg); border:1px solid var(--border); color: var(--text);
+    padding: 9px 11px; border-radius: 7px; font-size: 13.5px; font-family: inherit;
+    transition: border-color .15s ease;
+  }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color: var(--power); }
+  label{ display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.03em; }
+  .field{ margin-bottom: 14px; }
+  .field-row{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+
+  /* ---------- Leads view ---------- */
+  .toolbar{
+    display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap;
+    justify-content: space-between;
+  }
+  .filters{ display:flex; gap:8px; flex-wrap:wrap; flex:1; }
+  .filters select, .filters input{ width:auto; min-width:140px; }
+  .search-box{ position:relative; min-width:200px !important; flex:1; }
+
+  .table-wrap{
+    background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);
+    overflow-x:auto;
+  }
+  table{ width:100%; border-collapse: collapse; min-width: 1100px; }
+  thead th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;
+    color: var(--text-faint); font-weight:700; padding: 12px 14px; border-bottom:1px solid var(--border);
+    white-space:nowrap; position:sticky; top:0; background:var(--panel);
+  }
+  tbody td{ padding: 11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background: var(--panel-2); }
+  .cell-name{ font-weight:600; }
+  .cell-dim{ color: var(--text-dim); }
+  .empty-row td{ text-align:center; color:var(--text-faint); padding: 46px 14px; font-size:13.5px; }
+
+  .badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .badge-dot{ width:6px; height:6px; border-radius:50%; }
+  .badge-closed-y{ background: var(--good-dim); color: var(--good); }
+  .badge-closed-n{ background: var(--bad-dim); color: #FF9C8F; }
+  .badge-closed-pending{ background: var(--panel-2); color: var(--text-dim); }
+
+  .src-tag{ font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:6px; background: var(--panel-2); color:var(--text-dim); }
+  .row-actions{ display:flex; gap:6px; }
+
+  .followup-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:6px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .followup-overdue{ background: var(--bad-dim); color:#FF9C8F; }
+  .followup-today{ background: var(--power-dim); color: var(--power); }
+  .followup-upcoming{ background: var(--panel-2); color: var(--text-dim); }
+  .followup-done{ background: var(--good-dim); color: var(--good); }
+
+  .tab-badge{
+    display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:17px;
+    padding:0 5px; border-radius:999px; background: var(--bad); color:#fff; font-size:10.5px;
+    font-weight:700; margin-left:6px; vertical-align:middle;
+  }
+
+  /* ---------- Reminders view ---------- */
+  .reminder-group{ margin-bottom: 26px; }
+  .reminder-group-title{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .reminder-group-title .dot{ width:8px; height:8px; border-radius:50%; }
+  .reminder-group-title h3{ font-size:14px; margin:0; font-weight:700; }
+  .reminder-group-title .count{ color:var(--text-faint); font-size:12.5px; font-weight:600; }
+  .reminder-list{ display:flex; flex-direction:column; gap:8px; }
+  .reminder-card{
+    background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);
+    padding: 13px 16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .reminder-card.is-overdue{ border-color: rgba(225,92,78,0.45); }
+  .reminder-card.is-today{ border-color: rgba(242,169,60,0.45); }
+  .reminder-main{ flex:1; min-width:220px; }
+  .reminder-main .rname{ font-weight:700; font-size:13.5px; }
+  .reminder-main .rmeta{ color:var(--text-dim); font-size:12px; margin-top:3px; }
+  .reminder-main .rnote{ color:var(--text); font-size:12.5px; margin-top:6px; }
+  .reminder-date{ font-family:'Space Grotesk'; font-weight:700; font-size:14px; min-width:100px; text-align:right; }
+  .reminder-actions{ display:flex; gap:8px; }
+
+  /* ---------- Dashboard ---------- */
+  .summary-grid{ display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; margin-bottom: 22px; }
+  .summary-card{ background:var(--panel); border:1px solid var(--border); border-radius: var(--radius); padding:16px 18px; }
+  .summary-card .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+  .summary-card .value{ font-family:'Space Grotesk'; font-size:22px; font-weight:700; }
+  .summary-card .sub{ font-size:11.5px; color:var(--text-dim); margin-top:4px; }
+  .value.good{ color: var(--good); }
+  .value.bad{ color: #FF9C8F; }
+
+  .section-title{ display:flex; align-items:center; gap:10px; margin: 30px 0 12px; }
+  .section-title h3{ font-size:15px; margin:0; }
+  .section-title .line{ flex:1; height:1px; background:var(--border); }
+
+  .cat-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+  .cat-card{ background:var(--panel); border:1px solid var(--border); border-radius: var(--radius); padding:16px 18px; }
+  .cat-card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cat-card-head .name{ font-weight:700; font-size:14px; }
+  .cat-stats{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-bottom: 12px; }
+  .cat-stat .k{ font-size:10.5px; text-transform:uppercase; color:var(--text-faint); font-weight:700; letter-spacing:0.03em; }
+  .cat-stat .v{ font-size:15px; font-weight:700; font-family:'Space Grotesk'; margin-top:2px; }
+  .cost-input-row{ display:flex; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:12px; margin-top:4px; }
+  .cost-input-row label{ margin:0; white-space:nowrap; }
+  .cost-input-row input{ text-align:right; }
+
+  .service-table{ background:var(--panel); border:1px solid var(--border); border-radius: var(--radius); overflow:hidden; }
+  .service-table table{ min-width:0; }
+  .service-table thead th{ position:static; }
+
+  .pill-protection{ color: var(--protection); }
+  .pill-power{ color: var(--power); }
+
+  .foot-note{ font-size:11.5px; color:var(--text-faint); margin-top:10px; }
+
+  /* ---------- Categories view ---------- */
+  .cat-manage-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start; }
+  .cat-manage-panel{ background:var(--panel); border:1px solid var(--border); border-radius: var(--radius); padding:18px 20px; }
+  .cat-manage-panel h3{ font-size:14.5px; margin:0 0 4px; }
+  .cat-manage-panel .desc{ font-size:12px; color:var(--text-faint); margin:0 0 16px; }
+  .cat-row{
+    display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);
+  }
+  .cat-row:last-of-type{ border-bottom:none; }
+  .cat-row .cat-color-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .cat-row .cat-name{ flex:1; font-size:13.5px; font-weight:600; }
+  .cat-row .cat-group-tag{ font-size:11px; color:var(--text-faint); font-weight:600; }
+  .cat-edit-row{ display:flex; gap:8px; align-items:center; flex:1; }
+  .cat-edit-row input{ flex:1; }
+  .cat-edit-row select{ width:auto; flex-shrink:0; min-width:110px; }
+  .cat-add-row{ display:flex; gap:8px; margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); }
+  .cat-add-row input{ flex:1; }
+  .cat-add-row select{ width:auto; flex-shrink:0; min-width:130px; }
+  .cat-empty{ color:var(--text-faint); font-size:13px; padding: 10px 0; }
+
+  @media (max-width: 1000px){
+    .summary-grid{ grid-template-columns: repeat(2,1fr); }
+    .cat-grid{ grid-template-columns: 1fr; }
+    .cat-manage-grid{ grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px){
+    .field-row{ grid-template-columns: 1fr; }
+    .summary-grid{ grid-template-columns: 1fr; }
+  }
+
+  .hint{ color:var(--text-dim); font-size:12.5px; }
+
+  /* ---------- Side panel / overlay (Add / Edit Lead) ---------- */
+  .overlay{
+    display:none; position:fixed; inset:0; background:rgba(6,10,14,0.6);
+    z-index:1000; justify-content:flex-end; align-items:stretch;
+  }
+  .overlay.active{ display:flex; animation: fadein .15s ease; }
+  .panel{
+    width: 460px; max-width: 100%; height:100%; background: var(--panel);
+    border-left:1px solid var(--border); box-shadow: var(--shadow);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 22px; border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .panel-head h2{ font-size:17px; margin:0; }
+  .close-x{
+    background:transparent; border:none; color:var(--text-dim); font-size:22px;
+    line-height:1; cursor:pointer; padding:2px 6px; border-radius:6px;
+  }
+  .close-x:hover{ color:var(--text); background:var(--panel-2); }
+  .panel form{
+    flex:1; overflow-y:auto; padding: 20px 22px;
+  }
+  .panel-footer{
+    display:flex; gap:10px; justify-content:flex-end; padding: 16px 22px;
+    border-top:1px solid var(--border); flex-shrink:0;
+  }
+  @media (max-width: 640px){
+    .panel{ width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M24 3L41 10V22C41 32.5 34 40.5 24 45C14 40.5 7 32.5 7 22V10L24 3Z" fill="#1C2733" stroke="#3E8FD9" stroke-width="2"/>
+        <path d="M27 13L16 27H23L21 35L32 20H25L27 13Z" fill="#F2A93C"/>
+      </svg>
+      <div>
+        <h1>Protege Lead Manager</h1>
+        <p>Protection &amp; Power &middot; shared workspace</p>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="leads">Leads</button>
+      <button class="tab-btn" data-tab="reminders">Reminders<span class="tab-badge" id="reminderBadge" style="display:none;"></span></button>
+      <button class="tab-btn" data-tab="dashboard">Revenue Dashboard</button>
+      <button class="tab-btn" data-tab="categories">Categories</button>
+    </div>
+  </div>
+
+  <!-- ===================== LEADS VIEW ===================== -->
+  <div class="view active" id="view-leads">
+    <div class="toolbar">
+      <div class="filters">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by name or contact number...">
+        </div>
+        <select id="filterSource"><option value="">All sources</option></select>
+        <select id="filterService"><option value="">All services</option></select>
+        <select id="filterClosed">
+          <option value="">All outcomes</option>
+          <option value="Y">Closed - Won</option>
+          <option value="N">Closed - Lost</option>
+          <option value="">Pending</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="btnNewLead">+ New Lead</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name &amp; Surname</th>
+            <th>Contact Number</th>
+            <th>Source</th>
+            <th>Service Interested In</th>
+            <th>First Contact</th>
+            <th>Meeting Date</th>
+            <th>Quote #</th>
+            <th>Follow-up</th>
+            <th>Outcome</th>
+            <th>Deal Value</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="leadsTableBody">
+        </tbody>
+      </table>
+    </div>
+    <p class="foot-note" id="leadsCountNote"></p>
+  </div>
+
+  <!-- ===================== REMINDERS VIEW ===================== -->
+  <div class="view" id="view-reminders">
+    <p class="hint" style="margin-bottom:18px;">Follow-up reminders you've set on individual leads show up here, grouped by urgency. Set or change a reminder from a lead's edit panel.</p>
+    <div id="remindersContent"></div>
+  </div>
+
+  <!-- ===================== DASHBOARD VIEW ===================== -->
+  <div class="view" id="view-dashboard">
+
+    <div class="summary-grid" id="summaryGrid"></div>
+
+    <div class="section-title">
+      <h3>Performance &amp; marketing spend by lead source</h3>
+      <div class="line"></div>
+    </div>
+    <p class="hint" style="margin-bottom:16px;">Enter what you spend on each channel (e.g. Google Ads, Bark.com credits, Procompare credits) to see cost per lead and return on spend. Figures are shared between both users.</p>
+    <div class="cat-grid" id="sourceCards"></div>
+
+    <div class="section-title">
+      <h3>Revenue by service</h3>
+      <div class="line"></div>
+    </div>
+    <div class="service-table">
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Leads</th><th>Closed</th><th>Conversion</th><th>Revenue</th></tr>
+        </thead>
+        <tbody id="serviceTableBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ===================== CATEGORIES VIEW ===================== -->
+  <div class="view" id="view-categories">
+    <p class="hint" style="margin-bottom:18px;">Manage the lead source and service options that appear across the app. Renaming a category updates every lead already tagged with it; deleting one leaves past leads untouched but removes it from future dropdowns.</p>
+    <div class="cat-manage-grid">
+
+      <div class="cat-manage-panel">
+        <h3>Lead Sources</h3>
+        <p class="desc">Where leads come from (Google, Bark.com, etc).</p>
+        <div id="sourceCatList"></div>
+        <div class="cat-add-row">
+          <input type="text" id="newSourceName" placeholder="New source name, e.g. Facebook">
+          <button class="btn btn-primary btn-sm" id="btnAddSource">+ Add</button>
+        </div>
+      </div>
+
+      <div class="cat-manage-panel">
+        <h3>Services</h3>
+        <p class="desc">What the lead is interested in, grouped by business line.</p>
+        <div id="serviceCatList"></div>
+        <div class="cat-add-row">
+          <input type="text" id="newServiceName" placeholder="New service name">
+          <select id="newServiceGroup">
+            <option value="Protection">Protection</option>
+            <option value="Power">Power</option>
+            <option value="Other">Other</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="btnAddService">+ Add</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================== SIDE PANEL ===================== -->
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <div class="panel-head">
+      <h2 id="panelTitle">New Lead</h2>
+      <button class="close-x" id="btnClosePanel">&times;</button>
+    </div>
+    <form id="leadForm">
+      <input type="hidden" id="leadId">
+
+      <div class="field">
+        <label>Name &amp; Surname</label>
+        <input type="text" id="f_name" required placeholder="e.g. Thabo Nkosi">
+      </div>
+
+      <div class="field">
+        <label>Contact Number</label>
+        <input type="tel" id="f_contact" required placeholder="e.g. 082 123 4567">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Lead Source</label>
+          <select id="f_source" required></select>
+        </div>
+        <div class="field">
+          <label>Service Interested In</label>
+          <select id="f_service" required></select>
+        </div>
+      </div>
+      <div class="field" id="otherServiceWrap" style="display:none;">
+        <label>Specify Service</label>
+        <input type="text" id="f_serviceOther" placeholder="e.g. Fibre installation">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>First Contact</label>
+          <input type="date" id="f_firstContact">
+        </div>
+        <div class="field">
+          <label>Meeting Date</label>
+          <input type="date" id="f_meetingDate">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Quote Number</label>
+        <input type="text" id="f_quoteNumber" placeholder="e.g. Q-2026-0451">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Follow-up Date</label>
+          <input type="date" id="f_followUpDate">
+        </div>
+        <div class="field">
+          <label>Follow-up Note</label>
+          <input type="text" id="f_followUpNote" placeholder="e.g. Call back re: quote">
+        </div>
+      </div>
+      <div class="field" id="followUpDoneWrap" style="display:none;">
+        <label style="display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0; font-size:13px; color:var(--text);">
+          <input type="checkbox" id="f_followUpDone" style="width:16px; height:16px; flex-shrink:0;">
+          Mark this reminder as done
+        </label>
+      </div>
+
+      <div class="field">
+        <label>Deal Closed</label>
+        <select id="f_closed">
+          <option value="">Pending / in progress</option>
+          <option value="Y">Yes - closed &amp; won</option>
+          <option value="N">No - lost</option>
+        </select>
+      </div>
+
+      <div class="field" id="valueWrap" style="display:none;">
+        <label>Deal Value (ZAR)</label>
+        <input type="number" id="f_value" min="0" step="0.01" placeholder="e.g. 15000">
+      </div>
+
+      <div class="field" id="reasonWrap" style="display:none;">
+        <label>Reason For Not Closing</label>
+        <input type="text" id="f_reason" placeholder="e.g. Price too high, went with competitor">
+      </div>
+
+      <div class="panel-footer">
+        <button type="button" class="btn" id="btnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSave">Save Lead</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------------- Firebase-backed storage shim ----------------
+  // PASTE YOUR OWN FIREBASE CONFIG BELOW (from Firebase Console > Project settings > Your apps).
+  // These values are safe to expose in client-side code — Firestore security rules control access.
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-qcfqf5l8NZh-StuSqJ_ZdKCZnJEDwiE",
+    authDomain: "protege-lead-manager.firebaseapp.com",
+    projectId: "protege-lead-manager",
+    storageBucket: "protege-lead-manager.firebasestorage.app",
+    messagingSenderId: "782878602512",
+    appId: "1:782878602512:web:c40a058d114db0522e2195"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const COL = 'protege_lead_manager'; // Firestore collection name — all keys are stored as documents here
+
+  window.storage = {
+    async get(key){
+      const snap = await db.collection(COL).doc(key).get();
+      if(!snap.exists) return null;
+      return { key, value: snap.data().value, shared: true };
+    },
+    async set(key, value){
+      await db.collection(COL).doc(key).set({ value });
+      return { key, value, shared: true };
+    },
+    async delete(key){
+      await db.collection(COL).doc(key).delete();
+      return { key, deleted: true, shared: true };
+    },
+    async list(prefix){
+      const p = prefix || '';
+      const end = p + '\uf8ff';
+      const snap = await db.collection(COL)
+        .where(firebase.firestore.FieldPath.documentId(), '>=', p)
+        .where(firebase.firestore.FieldPath.documentId(), '<', end)
+        .get();
+      const keys = [];
+      snap.forEach(d => keys.push(d.id));
+      return { keys, prefix, shared: true };
+    }
+  };
+
+  const SOURCE_PALETTE = ["#4285F4","#8B7FD9","#45B884","#F2A93C","#FF6B6B","#3E8FD9","#B85C9E","#5FB3B3","#E8895D","#7C93C4","#63C7B2","#D46A9F"];
+
+  let leads = [];
+  let marketingCosts = {};       // sourceName -> number
+  let sourceCategories = [];     // [{id, name, createdAt}]
+  let serviceCategories = [];    // [{id, name, group: 'Protection'|'Power'|'Other', createdAt}]
+
+  const fmtZAR = n => "R " + (Number(n)||0).toLocaleString('en-ZA', {maximumFractionDigits:0});
+  const fmtPct = n => (isFinite(n) ? n.toFixed(0) : "0") + "%";
+  const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const genId = () => (crypto.randomUUID ? crypto.randomUUID() : 'c' + Date.now() + Math.random().toString(16).slice(2));
+  const todayStr = () => new Date().toISOString().slice(0,10);
+
+  function sortedSources(){ return [...sourceCategories].sort((a,b) => (a.createdAt||0) - (b.createdAt||0)); }
+  function sortedServices(group){
+    const list = group ? serviceCategories.filter(c => c.group === group) : serviceCategories;
+    return [...list].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  }
+  function getSourceColor(name){
+    const list = sortedSources();
+    const idx = list.findIndex(c => c.name === name);
+    if(idx === -1) return '#90A4B7';
+    return SOURCE_PALETTE[idx % SOURCE_PALETTE.length];
+  }
+
+  // ---------------- Storage: leads ----------------
+  async function loadLeads(){
+    leads = [];
+    try{
+      const listResult = await window.storage.list('lead:', true);
+      const keys = (listResult && listResult.keys) ? listResult.keys : [];
+      for(const k of keys){
+        try{
+          const res = await window.storage.get(k, true);
+          if(res && res.value){ leads.push(JSON.parse(res.value)); }
+        }catch(e){ /* skip unreadable key */ }
+      }
+    }catch(e){ console.error("Failed to load leads", e); }
+    leads.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  }
+
+  async function loadMarketingCosts(){
+    marketingCosts = {};
+    try{
+      const listResult = await window.storage.list('marketing-cost:', true);
+      const keys = (listResult && listResult.keys) ? listResult.keys : [];
+      for(const k of keys){
+        try{
+          const res = await window.storage.get(k, true);
+          if(res && res.value != null){
+            const source = k.replace('marketing-cost:', '');
+            marketingCosts[source] = Number(JSON.parse(res.value)) || 0;
+          }
+        }catch(e){ /* skip */ }
+      }
+    }catch(e){ console.error("Failed to load marketing costs", e); }
+  }
+
+  async function saveLeadToStorage(lead){
+    try{
+      const result = await window.storage.set('lead:' + lead.id, JSON.stringify(lead), true);
+      if(!result) throw new Error("empty result");
+      return true;
+    }catch(e){
+      console.error("Save failed", e);
+      alert("Sorry, that lead could not be saved. Please check your connection and try again.");
+      return false;
+    }
+  }
+
+  async function deleteLeadFromStorage(id){
+    try{ await window.storage.delete('lead:' + id, true); return true; }
+    catch(e){
+      console.error("Delete failed", e);
+      alert("Sorry, that lead could not be deleted. Please try again.");
+      return false;
+    }
+  }
+
+  async function saveMarketingCost(source, value){
+    try{ await window.storage.set('marketing-cost:' + source, JSON.stringify(Number(value)||0), true); return true; }
+    catch(e){ console.error("Save marketing cost failed", e); return false; }
+  }
+
+  async function deleteMarketingCost(source){
+    try{ await window.storage.delete('marketing-cost:' + source, true); }catch(e){ /* ignore */ }
+  }
+
+  // ---------------- Storage: categories ----------------
+  async function loadSourceCategories(){
+    sourceCategories = [];
+    try{
+      const listResult = await window.storage.list('lead-source:', true);
+      const keys = (listResult && listResult.keys) ? listResult.keys : [];
+      for(const k of keys){
+        try{
+          const res = await window.storage.get(k, true);
+          if(res && res.value){ sourceCategories.push(JSON.parse(res.value)); }
+        }catch(e){ /* skip */ }
+      }
+    }catch(e){ console.error("Failed to load lead sources", e); }
+  }
+
+  async function loadServiceCategories(){
+    serviceCategories = [];
+    try{
+      const listResult = await window.storage.list('service-category:', true);
+      const keys = (listResult && listResult.keys) ? listResult.keys : [];
+      for(const k of keys){
+        try{
+          const res = await window.storage.get(k, true);
+          if(res && res.value){ serviceCategories.push(JSON.parse(res.value)); }
+        }catch(e){ /* skip */ }
+      }
+    }catch(e){ console.error("Failed to load service categories", e); }
+  }
+
+  async function saveSourceCategory(cat){
+    try{ await window.storage.set('lead-source:' + cat.id, JSON.stringify(cat), true); return true; }
+    catch(e){ console.error("Save source failed", e); alert("Couldn't save that source. Please try again."); return false; }
+  }
+  async function deleteSourceCategoryStorage(id){
+    try{ await window.storage.delete('lead-source:' + id, true); return true; }
+    catch(e){ console.error("Delete source failed", e); alert("Couldn't delete that source. Please try again."); return false; }
+  }
+  async function saveServiceCategory(cat){
+    try{ await window.storage.set('service-category:' + cat.id, JSON.stringify(cat), true); return true; }
+    catch(e){ console.error("Save service failed", e); alert("Couldn't save that service. Please try again."); return false; }
+  }
+  async function deleteServiceCategoryStorage(id){
+    try{ await window.storage.delete('service-category:' + id, true); return true; }
+    catch(e){ console.error("Delete service failed", e); alert("Couldn't delete that service. Please try again."); return false; }
+  }
+
+  async function seedDefaultCategoriesIfNeeded(){
+    if(sourceCategories.length === 0){
+      const defaults = ["Google","Email","Call In","Word Of Mouth","Bark.com","Procompare"];
+      let t = Date.now();
+      for(const name of defaults){
+        const cat = { id: genId(), name, createdAt: t++ };
+        await saveSourceCategory(cat);
+        sourceCategories.push(cat);
+      }
+    }
+    if(serviceCategories.length === 0){
+      const protectionDefaults = ["Armed Response","Alarm Systems","CCTV Installation","Access Control","Electric Fencing","Guarding Services"];
+      const powerDefaults = ["Solar Installation","Inverter & Battery Backup","Generators","Load Shedding Solutions","Electrical Maintenance"];
+      let t = Date.now();
+      for(const name of protectionDefaults){
+        const cat = { id: genId(), name, group:'Protection', createdAt: t++ };
+        await saveServiceCategory(cat);
+        serviceCategories.push(cat);
+      }
+      for(const name of powerDefaults){
+        const cat = { id: genId(), name, group:'Power', createdAt: t++ };
+        await saveServiceCategory(cat);
+        serviceCategories.push(cat);
+      }
+    }
+  }
+
+  // ---------------- Tabs ----------------
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'dashboard') renderDashboard();
+      if(btn.dataset.tab === 'reminders') renderReminders();
+      if(btn.dataset.tab === 'categories') renderCategoriesView();
+    });
+  });
+
+  // ---------------- Filters & form selects (dynamic) ----------------
+  function populateFilterOptions(){
+    const srcSel = document.getElementById('filterSource');
+    const currentSrc = srcSel.value;
+    srcSel.innerHTML = '<option value="">All sources</option>';
+    sortedSources().forEach(c => {
+      const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; srcSel.appendChild(o);
+    });
+    if([...srcSel.options].some(o => o.value === currentSrc)) srcSel.value = currentSrc;
+
+    const svcSel = document.getElementById('filterService');
+    const currentSvc = svcSel.value;
+    svcSel.innerHTML = '<option value="">All services</option>';
+    sortedServices().forEach(c => {
+      const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; svcSel.appendChild(o);
+    });
+    if([...svcSel.options].some(o => o.value === currentSvc)) svcSel.value = currentSvc;
+  }
+
+  function populateFormSelects(){
+    const srcSel = document.getElementById('f_source');
+    const prevSrc = srcSel.value;
+    srcSel.innerHTML = '';
+    sortedSources().forEach(c => {
+      const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; srcSel.appendChild(o);
+    });
+    if([...srcSel.options].some(o => o.value === prevSrc)) srcSel.value = prevSrc;
+
+    const svcSel = document.getElementById('f_service');
+    const prevSvc = svcSel.value;
+    svcSel.innerHTML = '';
+    const groupLabels = { 'Protection':'Protege Protection', 'Power':'Protege Power', 'Other':'Other' };
+    ['Protection','Power','Other'].forEach(group => {
+      const items = sortedServices(group);
+      if(items.length === 0) return;
+      const og = document.createElement('optgroup');
+      og.label = groupLabels[group];
+      items.forEach(c => {
+        const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; og.appendChild(o);
+      });
+      svcSel.appendChild(og);
+    });
+    const freeform = document.createElement('option');
+    freeform.value = 'Other'; freeform.textContent = 'Other (type in)';
+    svcSel.appendChild(freeform);
+    if([...svcSel.options].some(o => o.value === prevSvc)) svcSel.value = prevSvc;
+  }
+
+  ['searchInput','filterSource','filterService','filterClosed'].forEach(id => {
+    document.getElementById(id).addEventListener('input', renderLeadsTable);
+    document.getElementById(id).addEventListener('change', renderLeadsTable);
+  });
+
+  // ---------------- Leads table render ----------------
+  function getFilteredLeads(){
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    const src = document.getElementById('filterSource').value;
+    const svc = document.getElementById('filterService').value;
+    const closedFilter = document.getElementById('filterClosed').value;
+    const closedSelectEl = document.getElementById('filterClosed');
+    const pendingSelected = closedSelectEl.selectedIndex === 2; // "Pending" option
+
+    return leads.filter(l => {
+      if(q && !((l.name||'').toLowerCase().includes(q) || (l.contact||'').toLowerCase().includes(q))) return false;
+      if(src && l.source !== src) return false;
+      if(svc && l.service !== svc) return false;
+      if(pendingSelected){ if(l.closed === 'Y' || l.closed === 'N') return false; }
+      else if(closedFilter && l.closed !== closedFilter) return false;
+      return true;
+    });
+  }
+
+  function followUpBadge(l){
+    if(!l.followUpDate) return '<span class="cell-dim">—</span>';
+    if(l.followUpDone) return `<span class="followup-badge followup-done">Done</span>`;
+    const today = todayStr();
+    let cls = 'followup-upcoming';
+    if(l.followUpDate < today) cls = 'followup-overdue';
+    else if(l.followUpDate === today) cls = 'followup-today';
+    const titleAttr = l.followUpNote ? ` title="${esc(l.followUpNote)}"` : '';
+    return `<span class="followup-badge ${cls}"${titleAttr}>${esc(l.followUpDate)}</span>`;
+  }
+
+  function outcomeBadge(l){
+    if(l.closed === 'Y') return `<span class="badge badge-closed-y"><span class="badge-dot" style="background:var(--good)"></span>Won</span>`;
+    if(l.closed === 'N') return `<span class="badge badge-closed-n"><span class="badge-dot" style="background:#FF9C8F"></span>Lost</span>`;
+    return `<span class="badge badge-closed-pending"><span class="badge-dot" style="background:var(--text-faint)"></span>Pending</span>`;
+  }
+
+  function renderLeadsTable(){
+    const tbody = document.getElementById('leadsTableBody');
+    const filtered = getFilteredLeads();
+    if(filtered.length === 0){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="11">No leads match your filters yet. Click "New Lead" to add one.</td></tr>`;
+    } else {
+      tbody.innerHTML = filtered.map(l => `
+        <tr>
+          <td class="cell-name">${esc(l.name)}</td>
+          <td class="cell-dim">${esc(l.contact)}</td>
+          <td><span class="src-tag" style="color:${getSourceColor(l.source)}">${esc(l.source)}</span></td>
+          <td>${esc(l.service)}</td>
+          <td class="cell-dim">${esc(l.firstContact)||'—'}</td>
+          <td class="cell-dim">${esc(l.meetingDate)||'—'}</td>
+          <td class="cell-dim">${esc(l.quoteNumber)||'—'}</td>
+          <td>${followUpBadge(l)}</td>
+          <td>${outcomeBadge(l)}</td>
+          <td class="cell-dim">${l.closed==='Y' ? fmtZAR(l.value) : '—'}</td>
+          <td>
+            <div class="row-actions">
+              <button class="btn btn-sm btn-ghost" onclick="LeadApp.editLead('${l.id}')">Edit</button>
+              <button class="btn btn-sm btn-ghost" onclick="LeadApp.confirmDelete('${l.id}', this)">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+    document.getElementById('leadsCountNote').textContent =
+      `Showing ${filtered.length} of ${leads.length} lead${leads.length===1?'':'s'}.`;
+  }
+
+  function confirmDelete(id, btnEl){
+    if(btnEl.dataset.confirming === '1'){
+      deleteLeadFromStorage(id).then(ok => {
+        if(ok){
+          leads = leads.filter(l => l.id !== id);
+          renderLeadsTable();
+          renderReminders();
+        }
+      });
+      return;
+    }
+    btnEl.dataset.confirming = '1';
+    const original = btnEl.textContent;
+    btnEl.textContent = 'Confirm?';
+    btnEl.classList.add('btn-danger');
+    setTimeout(() => {
+      if(btnEl.dataset.confirming === '1'){
+        btnEl.dataset.confirming = '0';
+        btnEl.textContent = original;
+        btnEl.classList.remove('btn-danger');
+      }
+    }, 3000);
+  }
+
+  // ---------------- Panel (add/edit) ----------------
+  const overlay = document.getElementById('overlay');
+  const form = document.getElementById('leadForm');
+
+  function openPanel(lead){
+    populateFormSelects();
+    form.reset();
+    document.getElementById('otherServiceWrap').style.display = 'none';
+    document.getElementById('valueWrap').style.display = 'none';
+    document.getElementById('reasonWrap').style.display = 'none';
+
+    if(lead){
+      document.getElementById('panelTitle').textContent = 'Edit Lead';
+      document.getElementById('leadId').value = lead.id;
+      document.getElementById('f_name').value = lead.name || '';
+      document.getElementById('f_contact').value = lead.contact || '';
+      if(lead.source) document.getElementById('f_source').value = lead.source;
+
+      const allServiceNames = serviceCategories.map(c => c.name);
+      if(lead.service && !allServiceNames.includes(lead.service)){
+        document.getElementById('f_service').value = 'Other';
+        document.getElementById('f_serviceOther').value = lead.service;
+        document.getElementById('otherServiceWrap').style.display = 'block';
+      } else if(lead.service){
+        document.getElementById('f_service').value = lead.service;
+      }
+
+      document.getElementById('f_firstContact').value = lead.firstContact || '';
+      document.getElementById('f_meetingDate').value = lead.meetingDate || '';
+      document.getElementById('f_quoteNumber').value = lead.quoteNumber || '';
+      document.getElementById('f_closed').value = lead.closed || '';
+      document.getElementById('f_value').value = lead.value || '';
+      document.getElementById('f_reason').value = lead.reason || '';
+      document.getElementById('f_followUpDate').value = lead.followUpDate || '';
+      document.getElementById('f_followUpNote').value = lead.followUpNote || '';
+      document.getElementById('f_followUpDone').checked = !!lead.followUpDone;
+      document.getElementById('followUpDoneWrap').style.display = lead.followUpDate ? 'block' : 'none';
+    } else {
+      document.getElementById('panelTitle').textContent = 'New Lead';
+      document.getElementById('leadId').value = '';
+      document.getElementById('f_firstContact').value = new Date().toISOString().slice(0,10);
+    }
+    toggleConditionalFields();
+    overlay.classList.add('active');
+  }
+
+  function closePanel(){ overlay.classList.remove('active'); }
+
+  document.getElementById('btnNewLead').addEventListener('click', () => openPanel(null));
+  document.getElementById('btnClosePanel').addEventListener('click', closePanel);
+  document.getElementById('btnCancel').addEventListener('click', closePanel);
+  overlay.addEventListener('click', e => { if(e.target === overlay) closePanel(); });
+
+  document.getElementById('f_service').addEventListener('change', toggleConditionalFields);
+  document.getElementById('f_closed').addEventListener('change', toggleConditionalFields);
+  document.getElementById('f_followUpDate').addEventListener('change', toggleConditionalFields);
+
+  function toggleConditionalFields(){
+    document.getElementById('otherServiceWrap').style.display =
+      document.getElementById('f_service').value === 'Other' ? 'block' : 'none';
+    const closedVal = document.getElementById('f_closed').value;
+    document.getElementById('valueWrap').style.display = closedVal === 'Y' ? 'block' : 'none';
+    document.getElementById('reasonWrap').style.display = closedVal === 'N' ? 'block' : 'none';
+    document.getElementById('followUpDoneWrap').style.display =
+      document.getElementById('f_followUpDate').value ? 'block' : 'none';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const saveBtn = document.getElementById('btnSave');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    const id = document.getElementById('leadId').value || genId();
+    const existing = leads.find(l => l.id === id);
+    let service = document.getElementById('f_service').value;
+    if(service === 'Other') service = document.getElementById('f_serviceOther').value.trim() || 'Other';
+
+    const lead = {
+      id,
+      name: document.getElementById('f_name').value.trim(),
+      contact: document.getElementById('f_contact').value.trim(),
+      source: document.getElementById('f_source').value,
+      service,
+      firstContact: document.getElementById('f_firstContact').value,
+      meetingDate: document.getElementById('f_meetingDate').value,
+      quoteNumber: document.getElementById('f_quoteNumber').value.trim(),
+      closed: document.getElementById('f_closed').value,
+      value: document.getElementById('f_closed').value === 'Y' ? (Number(document.getElementById('f_value').value)||0) : 0,
+      reason: document.getElementById('f_closed').value === 'N' ? document.getElementById('f_reason').value.trim() : '',
+      followUpDate: document.getElementById('f_followUpDate').value,
+      followUpNote: document.getElementById('f_followUpNote').value.trim(),
+      followUpDone: document.getElementById('f_followUpDate').value ? document.getElementById('f_followUpDone').checked : false,
+      createdAt: existing ? existing.createdAt : Date.now()
+    };
+
+    const ok = await saveLeadToStorage(lead);
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Lead';
+    if(ok){
+      if(existing){
+        leads = leads.map(l => l.id === id ? lead : l);
+      } else {
+        leads.unshift(lead);
+      }
+      renderLeadsTable();
+      renderReminders();
+      closePanel();
+    }
+  });
+
+  function editLead(id){
+    const lead = leads.find(l => l.id === id);
+    if(lead) openPanel(lead);
+  }
+
+  // ---------------- Reminders ----------------
+  function fmtDateNice(d){
+    if(!d) return '';
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' });
+  }
+
+  function reminderCard(l, statusClass){
+    return `
+      <div class="reminder-card ${statusClass==='is-overdue'?'is-overdue':statusClass==='is-today'?'is-today':''}">
+        <div class="reminder-main">
+          <div class="rname">${esc(l.name)}</div>
+          <div class="rmeta">${esc(l.contact)} &middot; ${esc(l.service)} &middot; <span class="src-tag" style="color:${getSourceColor(l.source)}">${esc(l.source)}</span></div>
+          ${l.followUpNote ? `<div class="rnote">${esc(l.followUpNote)}</div>` : ''}
+        </div>
+        <div class="reminder-date">${fmtDateNice(l.followUpDate)}</div>
+        <div class="reminder-actions">
+          <button class="btn btn-sm" onclick="LeadApp.markReminderDone('${l.id}')">Mark Done</button>
+          <button class="btn btn-sm btn-ghost" onclick="LeadApp.editLead('${l.id}')">Edit</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderReminders(){
+    const container = document.getElementById('remindersContent');
+    const badge = document.getElementById('reminderBadge');
+    const today = todayStr();
+
+    const active = leads.filter(l => l.followUpDate && !l.followUpDone);
+    active.sort((a,b) => a.followUpDate.localeCompare(b.followUpDate));
+
+    const overdue = active.filter(l => l.followUpDate < today);
+    const dueToday = active.filter(l => l.followUpDate === today);
+    const upcoming = active.filter(l => l.followUpDate > today);
+
+    const urgentCount = overdue.length + dueToday.length;
+    if(urgentCount > 0){ badge.style.display = 'inline-flex'; badge.textContent = urgentCount; }
+    else { badge.style.display = 'none'; }
+
+    if(active.length === 0){
+      container.innerHTML = `<p class="foot-note" style="padding:30px 0; text-align:center; font-size:13.5px;">No follow-up reminders set. Add one from a lead's edit panel using the Follow-up Date field.</p>`;
+      return;
+    }
+
+    let html = '';
+    if(overdue.length){
+      html += `
+        <div class="reminder-group">
+          <div class="reminder-group-title"><span class="dot" style="background:var(--bad)"></span><h3>Overdue</h3><span class="count">${overdue.length}</span></div>
+          <div class="reminder-list">${overdue.map(l => reminderCard(l,'is-overdue')).join('')}</div>
+        </div>`;
+    }
+    if(dueToday.length){
+      html += `
+        <div class="reminder-group">
+          <div class="reminder-group-title"><span class="dot" style="background:var(--power)"></span><h3>Due Today</h3><span class="count">${dueToday.length}</span></div>
+          <div class="reminder-list">${dueToday.map(l => reminderCard(l,'is-today')).join('')}</div>
+        </div>`;
+    }
+    if(upcoming.length){
+      html += `
+        <div class="reminder-group">
+          <div class="reminder-group-title"><span class="dot" style="background:var(--text-faint)"></span><h3>Upcoming</h3><span class="count">${upcoming.length}</span></div>
+          <div class="reminder-list">${upcoming.map(l => reminderCard(l,'')).join('')}</div>
+        </div>`;
+    }
+    container.innerHTML = html;
+  }
+
+  async function markReminderDone(id){
+    const lead = leads.find(l => l.id === id);
+    if(!lead) return;
+    const updated = Object.assign({}, lead, { followUpDone: true });
+    const ok = await saveLeadToStorage(updated);
+    if(ok){
+      leads = leads.map(l => l.id === id ? updated : l);
+      renderReminders();
+      renderLeadsTable();
+    }
+  }
+
+  // ---------------- Dashboard ----------------
+  function renderDashboard(){
+    const totalLeads = leads.length;
+    const closedWon = leads.filter(l => l.closed === 'Y');
+    const closedLost = leads.filter(l => l.closed === 'N');
+    const totalRevenue = closedWon.reduce((sum,l) => sum + (Number(l.value)||0), 0);
+    const totalSpend = sortedSources().reduce((sum,c) => sum + (marketingCosts[c.name]||0), 0);
+    const conversion = totalLeads ? (closedWon.length / totalLeads) * 100 : 0;
+    const profit = totalRevenue - totalSpend;
+
+    document.getElementById('summaryGrid').innerHTML = `
+      <div class="summary-card">
+        <div class="label">Total Leads</div>
+        <div class="value">${totalLeads}</div>
+        <div class="sub">${closedWon.length} won &middot; ${closedLost.length} lost</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Conversion Rate</div>
+        <div class="value">${fmtPct(conversion)}</div>
+        <div class="sub">of all leads logged</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Total Revenue</div>
+        <div class="value good">${fmtZAR(totalRevenue)}</div>
+        <div class="sub">from closed &amp; won deals</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Marketing Spend</div>
+        <div class="value">${fmtZAR(totalSpend)}</div>
+        <div class="sub">across all channels</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Net Profit</div>
+        <div class="value ${profit>=0?'good':'bad'}">${fmtZAR(profit)}</div>
+        <div class="sub">revenue minus marketing spend</div>
+      </div>
+    `;
+
+    // Source cards
+    const srcList = sortedSources();
+    document.getElementById('sourceCards').innerHTML = srcList.length === 0
+      ? `<p class="cat-empty">No lead sources yet — add some in the Categories tab.</p>`
+      : srcList.map(cat => {
+        const source = cat.name;
+        const srcLeads = leads.filter(l => l.source === source);
+        const won = srcLeads.filter(l => l.closed === 'Y');
+        const revenue = won.reduce((sum,l) => sum + (Number(l.value)||0), 0);
+        const cost = marketingCosts[source] || 0;
+        const conv = srcLeads.length ? (won.length/srcLeads.length*100) : 0;
+        const costPerLead = srcLeads.length ? (cost/srcLeads.length) : 0;
+        const roi = cost > 0 ? ((revenue - cost)/cost*100) : null;
+        const profitSrc = revenue - cost;
+
+        return `
+          <div class="cat-card">
+            <div class="cat-card-head">
+              <span class="name" style="color:${getSourceColor(source)}">${esc(source)}</span>
+              <span class="cell-dim" style="font-size:11.5px;">${srcLeads.length} lead${srcLeads.length===1?'':'s'}</span>
+            </div>
+            <div class="cat-stats">
+              <div class="cat-stat"><div class="k">Won</div><div class="v">${won.length}</div></div>
+              <div class="cat-stat"><div class="k">Conversion</div><div class="v">${fmtPct(conv)}</div></div>
+              <div class="cat-stat"><div class="k">Revenue</div><div class="v" style="color:var(--good)">${fmtZAR(revenue)}</div></div>
+              <div class="cat-stat"><div class="k">Cost / Lead</div><div class="v">${fmtZAR(costPerLead)}</div></div>
+              <div class="cat-stat"><div class="k">Profit</div><div class="v" style="color:${profitSrc>=0?'var(--good)':'#FF9C8F'}">${fmtZAR(profitSrc)}</div></div>
+              <div class="cat-stat"><div class="k">Return on Spend</div><div class="v">${roi===null?'—':fmtPct(roi)}</div></div>
+            </div>
+            <div class="cost-input-row">
+              <label style="margin:0;">Marketing cost (R)</label>
+              <input type="number" min="0" step="0.01" value="${cost||''}" placeholder="0"
+                data-source="${esc(source)}" class="marketing-cost-input">
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    document.querySelectorAll('.marketing-cost-input').forEach(inp => {
+      inp.addEventListener('change', async (e) => {
+        const source = e.target.dataset.source;
+        const val = Number(e.target.value) || 0;
+        marketingCosts[source] = val;
+        await saveMarketingCost(source, val);
+        renderDashboard();
+      });
+    });
+
+    // Service table
+    const orderedServiceCats = [...sortedServices('Protection'), ...sortedServices('Power'), ...sortedServices('Other')];
+    const knownNames = new Set(orderedServiceCats.map(c => c.name));
+    const strayNames = Array.from(new Set(leads.map(l => l.service).filter(s => s && !knownNames.has(s))));
+    const orderedServiceNames = [...orderedServiceCats.map(c => c.name), ...strayNames];
+    const groupByName = {};
+    orderedServiceCats.forEach(c => groupByName[c.name] = c.group);
+
+    const rows = orderedServiceNames.map(svc => {
+      const svcLeads = leads.filter(l => l.service === svc);
+      if(svcLeads.length === 0) return null;
+      const won = svcLeads.filter(l => l.closed === 'Y');
+      const revenue = won.reduce((sum,l) => sum + (Number(l.value)||0), 0);
+      const conv = svcLeads.length ? (won.length/svcLeads.length*100) : 0;
+      const group = groupByName[svc];
+      const pillClass = group === 'Protection' ? 'pill-protection' : (group === 'Power' ? 'pill-power' : '');
+      return `
+        <tr>
+          <td class="${pillClass}" style="font-weight:600;">${esc(svc)}</td>
+          <td>${svcLeads.length}</td>
+          <td>${won.length}</td>
+          <td>${fmtPct(conv)}</td>
+          <td style="color:var(--good); font-weight:600;">${fmtZAR(revenue)}</td>
+        </tr>
+      `;
+    }).filter(Boolean);
+
+    document.getElementById('serviceTableBody').innerHTML = rows.length ? rows.join('') :
+      `<tr><td colspan="5" style="text-align:center; color:var(--text-faint); padding:30px;">No leads logged against a service yet.</td></tr>`;
+  }
+
+  // ---------------- Categories management ----------------
+  function renderCategoriesView(){
+    renderSourceCatList();
+    renderServiceCatList();
+  }
+
+  function renderSourceCatList(){
+    const el = document.getElementById('sourceCatList');
+    const list = sortedSources();
+    if(list.length === 0){ el.innerHTML = `<p class="cat-empty">No sources yet — add one below.</p>`; return; }
+    el.innerHTML = list.map(cat => {
+      const usageCount = leads.filter(l => l.source === cat.name).length;
+      return `
+        <div class="cat-row" id="src-row-${cat.id}">
+          <span class="cat-color-dot" style="background:${getSourceColor(cat.name)}"></span>
+          <span class="cat-name">${esc(cat.name)}</span>
+          <span class="cat-group-tag">${usageCount} lead${usageCount===1?'':'s'}</span>
+          <button class="btn btn-sm btn-ghost" onclick="LeadApp.startEditSource('${cat.id}')">Edit</button>
+          <button class="btn btn-sm btn-ghost" onclick="LeadApp.confirmDeleteSource('${cat.id}', this)">Delete</button>
+        </div>`;
+    }).join('');
+  }
+
+  function renderServiceCatList(){
+    const el = document.getElementById('serviceCatList');
+    const list = [...sortedServices('Protection'), ...sortedServices('Power'), ...sortedServices('Other')];
+    if(list.length === 0){ el.innerHTML = `<p class="cat-empty">No services yet — add one below.</p>`; return; }
+    const groupLabels = { 'Protection':'Protection', 'Power':'Power', 'Other':'Other' };
+    el.innerHTML = list.map(cat => {
+      const usageCount = leads.filter(l => l.service === cat.name).length;
+      const pillClass = cat.group === 'Protection' ? 'pill-protection' : (cat.group === 'Power' ? 'pill-power' : '');
+      return `
+        <div class="cat-row" id="svc-row-${cat.id}">
+          <span class="cat-name ${pillClass}">${esc(cat.name)}</span>
+          <span class="cat-group-tag">${groupLabels[cat.group]||'Other'} &middot; ${usageCount} lead${usageCount===1?'':'s'}</span>
+          <button class="btn btn-sm btn-ghost" onclick="LeadApp.startEditService('${cat.id}')">Edit</button>
+          <button class="btn btn-sm btn-ghost" onclick="LeadApp.confirmDeleteService('${cat.id}', this)">Delete</button>
+        </div>`;
+    }).join('');
+  }
+
+  function startEditSource(id){
+    const cat = sourceCategories.find(c => c.id === id);
+    if(!cat) return;
+    const row = document.getElementById('src-row-' + id);
+    row.innerHTML = `
+      <div class="cat-edit-row">
+        <input type="text" id="edit-src-input-${id}" value="${esc(cat.name)}">
+        <button class="btn btn-sm btn-primary" onclick="LeadApp.saveEditSource('${id}')">Save</button>
+        <button class="btn btn-sm btn-ghost" onclick="LeadApp.renderCategoriesView()">Cancel</button>
+      </div>`;
+    document.getElementById(`edit-src-input-${id}`).focus();
+  }
+
+  async function saveEditSource(id){
+    const input = document.getElementById(`edit-src-input-${id}`);
+    const newName = input.value.trim();
+    if(!newName) return;
+    const cat = sourceCategories.find(c => c.id === id);
+    if(!cat) return;
+    const oldName = cat.name;
+    if(newName === oldName){ renderCategoriesView(); return; }
+
+    const updatedCat = Object.assign({}, cat, { name: newName });
+    const ok = await saveSourceCategory(updatedCat);
+    if(!ok) return;
+    sourceCategories = sourceCategories.map(c => c.id === id ? updatedCat : c);
+
+    // cascade rename across leads
+    const affected = leads.filter(l => l.source === oldName);
+    for(const l of affected){
+      const updatedLead = Object.assign({}, l, { source: newName });
+      await saveLeadToStorage(updatedLead);
+      leads = leads.map(x => x.id === l.id ? updatedLead : x);
+    }
+    // migrate marketing cost entry
+    if(marketingCosts[oldName] != null){
+      const val = marketingCosts[oldName];
+      await saveMarketingCost(newName, val);
+      await deleteMarketingCost(oldName);
+      marketingCosts[newName] = val;
+      delete marketingCosts[oldName];
+    }
+
+    populateFilterOptions();
+    renderLeadsTable();
+    renderReminders();
+    renderCategoriesView();
+  }
+
+  function confirmDeleteSource(id, btnEl){
+    if(btnEl.dataset.confirming === '1'){
+      (async () => {
+        const cat = sourceCategories.find(c => c.id === id);
+        if(!cat) return;
+        const ok = await deleteSourceCategoryStorage(id);
+        if(ok){
+          sourceCategories = sourceCategories.filter(c => c.id !== id);
+          if(marketingCosts[cat.name] != null){
+            await deleteMarketingCost(cat.name);
+            delete marketingCosts[cat.name];
+          }
+          populateFilterOptions();
+          renderDashboard();
+          renderCategoriesView();
+        }
+      })();
+      return;
+    }
+    btnEl.dataset.confirming = '1';
+    const original = btnEl.textContent;
+    btnEl.textContent = 'Confirm?';
+    btnEl.classList.add('btn-danger');
+    setTimeout(() => {
+      if(btnEl.dataset.confirming === '1'){
+        btnEl.dataset.confirming = '0';
+        btnEl.textContent = original;
+        btnEl.classList.remove('btn-danger');
+      }
+    }, 3000);
+  }
+
+  function startEditService(id){
+    const cat = serviceCategories.find(c => c.id === id);
+    if(!cat) return;
+    const row = document.getElementById('svc-row-' + id);
+    row.innerHTML = `
+      <div class="cat-edit-row">
+        <input type="text" id="edit-svc-input-${id}" value="${esc(cat.name)}">
+        <select id="edit-svc-group-${id}">
+          <option value="Protection" ${cat.group==='Protection'?'selected':''}>Protection</option>
+          <option value="Power" ${cat.group==='Power'?'selected':''}>Power</option>
+          <option value="Other" ${cat.group==='Other'?'selected':''}>Other</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="LeadApp.saveEditService('${id}')">Save</button>
+        <button class="btn btn-sm btn-ghost" onclick="LeadApp.renderCategoriesView()">Cancel</button>
+      </div>`;
+    document.getElementById(`edit-svc-input-${id}`).focus();
+  }
+
+  async function saveEditService(id){
+    const input = document.getElementById(`edit-svc-input-${id}`);
+    const groupSel = document.getElementById(`edit-svc-group-${id}`);
+    const newName = input.value.trim();
+    const newGroup = groupSel.value;
+    if(!newName) return;
+    const cat = serviceCategories.find(c => c.id === id);
+    if(!cat) return;
+    const oldName = cat.name;
+
+    const updatedCat = Object.assign({}, cat, { name: newName, group: newGroup });
+    const ok = await saveServiceCategory(updatedCat);
+    if(!ok) return;
+    serviceCategories = serviceCategories.map(c => c.id === id ? updatedCat : c);
+
+    if(newName !== oldName){
+      const affected = leads.filter(l => l.service === oldName);
+      for(const l of affected){
+        const updatedLead = Object.assign({}, l, { service: newName });
+        await saveLeadToStorage(updatedLead);
+        leads = leads.map(x => x.id === l.id ? updatedLead : x);
+      }
+    }
+
+    populateFilterOptions();
+    renderLeadsTable();
+    renderDashboard();
+    renderCategoriesView();
+  }
+
+  function confirmDeleteService(id, btnEl){
+    if(btnEl.dataset.confirming === '1'){
+      (async () => {
+        const ok = await deleteServiceCategoryStorage(id);
+        if(ok){
+          serviceCategories = serviceCategories.filter(c => c.id !== id);
+          populateFilterOptions();
+          renderDashboard();
+          renderCategoriesView();
+        }
+      })();
+      return;
+    }
+    btnEl.dataset.confirming = '1';
+    const original = btnEl.textContent;
+    btnEl.textContent = 'Confirm?';
+    btnEl.classList.add('btn-danger');
+    setTimeout(() => {
+      if(btnEl.dataset.confirming === '1'){
+        btnEl.dataset.confirming = '0';
+        btnEl.textContent = original;
+        btnEl.classList.remove('btn-danger');
+      }
+    }, 3000);
+  }
+
+  document.getElementById('btnAddSource').addEventListener('click', async () => {
+    const input = document.getElementById('newSourceName');
+    const name = input.value.trim();
+    if(!name) return;
+    if(sourceCategories.some(c => c.name.toLowerCase() === name.toLowerCase())){
+      alert('That source already exists.');
+      return;
+    }
+    const cat = { id: genId(), name, createdAt: Date.now() };
+    const ok = await saveSourceCategory(cat);
+    if(ok){
+      sourceCategories.push(cat);
+      input.value = '';
+      populateFilterOptions();
+      renderDashboard();
+      renderCategoriesView();
+    }
+  });
+
+  document.getElementById('btnAddService').addEventListener('click', async () => {
+    const input = document.getElementById('newServiceName');
+    const groupSel = document.getElementById('newServiceGroup');
+    const name = input.value.trim();
+    const group = groupSel.value;
+    if(!name) return;
+    if(serviceCategories.some(c => c.name.toLowerCase() === name.toLowerCase())){
+      alert('That service already exists.');
+      return;
+    }
+    const cat = { id: genId(), name, group, createdAt: Date.now() };
+    const ok = await saveServiceCategory(cat);
+    if(ok){
+      serviceCategories.push(cat);
+      input.value = '';
+      populateFilterOptions();
+      renderDashboard();
+      renderCategoriesView();
+    }
+  });
+
+  // ---------------- Init ----------------
+  window.LeadApp = {
+    editLead, confirmDelete, markReminderDone,
+    startEditSource, saveEditSource, confirmDeleteSource,
+    startEditService, saveEditService, confirmDeleteService,
+    renderCategoriesView
+  };
+
+  async function init(){
+    document.getElementById('leadsTableBody').innerHTML = `<tr class="empty-row"><td colspan="11">Loading leads...</td></tr>`;
+    await Promise.all([loadSourceCategories(), loadServiceCategories(), loadLeads(), loadMarketingCosts()]);
+    await seedDefaultCategoriesIfNeeded();
+    populateFilterOptions();
+    renderLeadsTable();
+    renderDashboard();
+    renderReminders();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
