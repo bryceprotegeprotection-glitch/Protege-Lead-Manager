@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Settings — Lead Manager</title>
+  <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="settings.css" />
 </head>
 <body>
@@ -30,14 +31,18 @@
     </section>
 
     <section class="panel small">
+      <button id="request-notifs">Enable Notifications</button>
       <button id="clear-data">Clear demo data</button>
     </section>
   </main>
 
-  <script src="settings.js"></script>
+  <script type="module" src="settings-firebase.js"></script>
   <script>
+    // Ensure firebase-messaging-sw.js is registered at the site root for background messages
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+      navigator.serviceWorker.register('/firebase-messaging-sw.js').then(() => {
+        console.log('firebase-messaging-sw registered');
+      }).catch(err => console.error('SW register failed', err));
     }
   </script>
 </body>
