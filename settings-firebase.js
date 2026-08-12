@@ -1,16 +1,16 @@
 // settings-firebase.js (ES Module)
-// Replace the firebaseConfig object and VAPID key placeholders with your project's values.
+// Firebase config has been filled from user-provided values. Replace VAPID_KEY with your Web Push public key if you have it.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
 import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
 import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging.js';
 
 const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME"
+  apiKey: "AIzaSyD-qcfqf5l8NZh-StuSqJ_ZdKCZnJEDwiE",
+  authDomain: "protege-lead-manager.firebaseapp.com",
+  projectId: "protege-lead-manager",
+  storageBucket: "protege-lead-manager.firebasestorage.app",
+  messagingSenderId: "782878602512",
+  appId: "1:782878602512:web:c40a058d114db0522e2195"
 };
 
 const VAPID_KEY = 'REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY'; // from Firebase Console -> Project Settings -> Cloud Messaging

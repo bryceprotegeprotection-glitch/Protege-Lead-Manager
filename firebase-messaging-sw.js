@@ -2,14 +2,14 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js');
 
-// Paste the same firebaseConfig used in settings-firebase.js
+// Firebase config filled from user-provided values
 const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME"
+  apiKey: "AIzaSyD-qcfqf5l8NZh-StuSqJ_ZdKCZnJEDwiE",
+  authDomain: "protege-lead-manager.firebaseapp.com",
+  projectId: "protege-lead-manager",
+  storageBucket: "protege-lead-manager.firebasestorage.app",
+  messagingSenderId: "782878602512",
+  appId: "1:782878602512:web:c40a058d114db0522e2195"
 };
 
 firebase.initializeApp(firebaseConfig);
