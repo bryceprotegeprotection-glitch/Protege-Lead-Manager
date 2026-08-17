@@ -257,7 +257,8 @@
     }
   };
 
-  let leads = [], sourceCategories = [], serviceCategories = [], sectorCategories = [];
+  let leads = [], sourceCategories = [], serviceCategories = [], sectorCategories = [], marketingSpend = {};
+  let dashboardSelectedMonth = null;
   const fmtZAR = n => "R " + (Number(n)||0).toLocaleString('en-ZA', {maximumFractionDigits:0});
   const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const genId = () => (crypto.randomUUID ? crypto.randomUUID() : 'c' + Date.now() + Math.random().toString(16).slice(2));
@@ -269,9 +270,44 @@
     await loadSourceCategories();
     await loadServiceCategories();
     await loadSectorCategories();
+    await loadMarketingSpend();
     await seedDefaultsIfNeeded();
     populateFilterOptions();
     renderLeadsTable();
+  }
+
+  async function loadMarketingSpend(){
+    marketingSpend = {};
+    try{
+      const listResult = await window.storage.list('spend:');
+      const keys = (listResult && listResult.keys) ? listResult.keys : [];
+      for(const k of keys){
+        try{
+          const res = await window.storage.get(k);
+          if(res && res.value != null){
+            // key format: spend:YYYY-MM:sourceName
+            const rest = k.slice('spend:'.length);
+            const month = rest.slice(0,7);
+            const source = rest.slice(8); // skip "YYYY-MM:"
+            if(!marketingSpend[month]) marketingSpend[month] = {};
+            marketingSpend[month][source] = Number(JSON.parse(res.value)) || 0;
+          }
+        }catch(e){}
+      }
+    }catch(e){ console.error("Failed to load marketing spend", e); }
+  }
+
+  async function saveMarketingSpend(month, source, amount){
+    try{
+      await window.storage.set('spend:' + month + ':' + source, JSON.stringify(Number(amount) || 0));
+      if(!marketingSpend[month]) marketingSpend[month] = {};
+      marketingSpend[month][source] = Number(amount) || 0;
+      return true;
+    }catch(e){
+      console.error("Save spend failed", e);
+      alert("Sorry, that spend amount could not be saved. Please check your connection and try again.");
+      return false;
+    }
   }
 
   async function loadLeads(){
@@ -658,8 +694,58 @@
       document.getElementById('view-' + btn.dataset.tab).classList.add('active');
       if(btn.dataset.tab === 'dashboard') renderDashboard();
       if(btn.dataset.tab === 'categories') renderCategoriesView();
+      if(btn.dataset.tab === 'reminders') renderReminders();
     });
   });
+
+  function renderReminders(){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const withDates = leads.filter(l => l.followUpDate);
+
+    if(!withDates.length){
+      document.getElementById('remindersContent').innerHTML = '<div class="cat-empty">No follow-up reminders set yet.</div>';
+      return;
+    }
+
+    const parsed = withDates.map(l => {
+      const d = new Date(l.followUpDate + 'T00:00:00');
+      const diffDays = Math.round((d - today) / 86400000);
+      let status = 'upcoming';
+      if(diffDays < 0) status = 'overdue';
+      else if(diffDays === 0) status = 'today';
+      return { lead: l, date: d, diffDays, status };
+    }).sort((a,b) => a.date - b.date);
+
+    const groups = [
+      { key: 'overdue', title: 'Overdue' },
+      { key: 'today', title: 'Due Today' },
+      { key: 'upcoming', title: 'Upcoming' }
+    ];
+
+    const badgeClass = { overdue: 'badge-closed-n', today: 'badge-closed-pending', upcoming: 'badge-closed-y' };
+    const badgeLabel = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming' };
+
+    let html = '';
+    groups.forEach(g => {
+      const items = parsed.filter(p => p.status === g.key);
+      if(!items.length) return;
+      html += `<div class="section-title"><h3>${g.title} (${items.length})</h3><div class="line"></div></div>`;
+      html += items.map(p => `
+        <div class="call-log-entry">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div>
+              <div class="cell-name" style="font-size:14px;">${esc(p.lead.name)}</div>
+              <div class="entry-date">${esc(p.lead.followUpDate)}${p.lead.contact ? ' · ' + esc(p.lead.contact) : ''}</div>
+            </div>
+            <span class="badge ${badgeClass[p.status]}"><span class="badge-dot"></span>${badgeLabel[p.status]}</span>
+          </div>
+          ${p.lead.followUpNote ? `<div class="entry-notes">${esc(p.lead.followUpNote)}</div>` : ''}
+        </div>
+      `).join('');
+    });
+
+    document.getElementById('remindersContent').innerHTML = html || '<div class="cat-empty">No follow-up reminders set yet.</div>';
+  }
 
   function renderDashboard(){
     const totalLeads = leads.length;
@@ -673,9 +759,119 @@
       <div class="summary-card"><div class="label">Total Revenue</div><div class="value good">${fmtZAR(totalRevenue)}</div></div>
     `;
 
+    const won = leads.filter(l => l.closed === 'Y' && l.createdAt);
+    const monthlyBySource = {}; // { month: { source: revenue } }
+    won.forEach(l => {
+      const d = new Date(l.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const src = l.source || 'Unspecified';
+      if(!monthlyBySource[key]) monthlyBySource[key] = {};
+      monthlyBySource[key][src] = (monthlyBySource[key][src] || 0) + (Number(l.value) || 0);
+    });
+
+    const currentMonthKey = todayStr().slice(0,7);
+    const monthSet = new Set([...Object.keys(monthlyBySource), ...Object.keys(marketingSpend), currentMonthKey]);
+    const months = Array.from(monthSet).sort();
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Totals-by-month table (summed across all sources), with cumulative columns
+    let cumRevenue = 0, cumSpend = 0;
+    const totalsRows = months.map(key => {
+      const [y, m] = key.split('-');
+      const revenue = Object.values(monthlyBySource[key] || {}).reduce((s,v) => s+v, 0);
+      const spend = Object.values(marketingSpend[key] || {}).reduce((s,v) => s+v, 0);
+      cumRevenue += revenue;
+      cumSpend += spend;
+      const netCum = cumRevenue - cumSpend;
+      return `
+        <tr>
+          <td class="cell-name">${monthNames[Number(m)-1]} ${y}</td>
+          <td>${fmtZAR(revenue)}</td>
+          <td>${fmtZAR(spend)}</td>
+          <td class="cell-dim">${fmtZAR(cumRevenue)}</td>
+          <td class="cell-dim">${fmtZAR(cumSpend)}</td>
+          <td style="${netCum >= 0 ? 'color:var(--good);font-weight:700;' : 'color:#FF9C8F;font-weight:700;'}">${fmtZAR(netCum)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Month picker for the per-category (per-source) breakdown, defaulting to most recent month
+    if(!dashboardSelectedMonth || !months.includes(dashboardSelectedMonth)){
+      dashboardSelectedMonth = months[months.length - 1];
+    }
+    const monthOptions = months.map(key => {
+      const [y, m] = key.split('-');
+      return `<option value="${key}" ${key === dashboardSelectedMonth ? 'selected' : ''}>${monthNames[Number(m)-1]} ${y}</option>`;
+    }).join('');
+
+    // Per-category breakdown for the selected month: every known source, revenue + editable spend
+    const selRevenueBySource = monthlyBySource[dashboardSelectedMonth] || {};
+    const selSpendBySource = marketingSpend[dashboardSelectedMonth] || {};
+    const allSources = new Set([
+      ...sourceCategories.map(c => c.name),
+      ...Object.keys(selRevenueBySource),
+      ...Object.keys(selSpendBySource)
+    ]);
+    const sourceNames = Array.from(allSources).sort((a,b) => a.localeCompare(b));
+
+    let catTotalRevenue = 0, catTotalSpend = 0;
+    const categoryRows = sourceNames.map(src => {
+      const revenue = selRevenueBySource[src] || 0;
+      const spend = selSpendBySource[src] || 0;
+      catTotalRevenue += revenue;
+      catTotalSpend += spend;
+      const net = revenue - spend;
+      return `
+        <tr>
+          <td class="cell-name">${esc(src)}</td>
+          <td>${fmtZAR(revenue)}</td>
+          <td>
+            <input type="number" min="0" step="1" class="spend-input" data-month="${dashboardSelectedMonth}" data-source="${esc(src)}" value="${spend}" style="width:120px;padding:6px 8px;">
+          </td>
+          <td style="${net >= 0 ? 'color:var(--good);font-weight:700;' : 'color:#FF9C8F;font-weight:700;'}">${fmtZAR(net)}</td>
+        </tr>
+      `;
+    }).join('');
+
     document.getElementById('revenueMetrics').innerHTML = `
-      <p class="hint">Enhanced revenue tracking with monthly spend and cumulative calculations coming soon.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Month</th><th>Revenue</th><th>Marketing Spend</th><th>Cum. Revenue</th><th>Cum. Spend</th><th>Net Cumulative</th></tr></thead>
+          <tbody>${totalsRows}</tbody>
+        </table>
+      </div>
+
+      <div class="section-title"><h3>Spend by Category</h3><div class="line"></div></div>
+      <div class="toolbar">
+        <div class="filters">
+          <select id="dashboardMonthSelect">${monthOptions}</select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Source / Category</th><th>Revenue</th><th>Marketing Spend</th><th>Net</th></tr></thead>
+          <tbody>${categoryRows || '<tr class="empty-row"><td colspan="4">No sources yet — add one in Categories.</td></tr>'}</tbody>
+          ${sourceNames.length ? `<tfoot><tr><td class="cell-name">Total</td><td class="cell-name">${fmtZAR(catTotalRevenue)}</td><td class="cell-name">${fmtZAR(catTotalSpend)}</td><td class="cell-name" style="${(catTotalRevenue-catTotalSpend) >= 0 ? 'color:var(--good);' : 'color:#FF9C8F;'}">${fmtZAR(catTotalRevenue-catTotalSpend)}</td></tr></tfoot>` : ''}
+        </table>
+      </div>
     `;
+
+    document.getElementById('dashboardMonthSelect').addEventListener('change', (e) => {
+      dashboardSelectedMonth = e.target.value;
+      renderDashboard();
+    });
+
+    document.querySelectorAll('.spend-input').forEach(input => {
+      input.addEventListener('change', async () => {
+        const month = input.dataset.month;
+        const source = input.dataset.source;
+        const val = Number(input.value) || 0;
+        input.disabled = true;
+        const ok = await saveMarketingSpend(month, source, val);
+        input.disabled = false;
+        if(ok) renderDashboard();
+      });
+    });
   }
 
   function renderCategoriesView(){
