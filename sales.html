@@ -29,6 +29,7 @@
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;justify-content:space-between;}.filters{display:flex;gap:8px;flex-wrap:wrap;flex:1;}.filters select,.filters input{width:auto;min-width:140px;}
   .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;}table{width:100%;border-collapse:collapse;min-width:1100px;}
   thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:700;padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--panel);}
+  thead th.sortable{cursor:pointer;user-select:none;}thead th.sortable:hover{color:var(--text);}thead th.sortable .sort-arrow{margin-left:4px;opacity:0.4;}thead th.sortable.sort-active .sort-arrow{opacity:1;color:var(--protection);}
   tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px;}tbody tr:last-child td{border-bottom:none;}tbody tr:hover{background:var(--panel-2);}
   .cell-name{font-weight:600;}.cell-dim{color:var(--text-dim);}.empty-row td{text-align:center;color:var(--text-faint);padding:46px 14px;font-size:13.5px;}
   .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;}.badge-dot{width:6px;height:6px;border-radius:50%;}
@@ -91,6 +92,10 @@
       <label>Password</label>
       <input type="password" id="loginPassword" placeholder="Password">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;text-transform:none;font-size:13px;color:var(--text-dim);font-weight:500;letter-spacing:normal;cursor:pointer;">
+      <input type="checkbox" id="loginStaySignedIn" style="width:auto;" checked>
+      Stay signed in on this device
+    </label>
     <button type="button" class="btn btn-primary" id="btnLogin" style="width:100%;justify-content:center;">Sign In</button>
     <p id="loginError" style="color:var(--bad);font-size:12.5px;margin:14px 0 0;display:none;"></p>
   </div>
@@ -126,13 +131,14 @@
           <option value="">Pending</option>
         </select>
       </div>
+      <button class="btn" id="btnExportLeads">Export</button>
       <button class="btn btn-primary" id="btnNewLead">+ New Lead</button>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Name</th><th>Contact</th><th>Source</th><th>Service</th><th>Sector</th><th>Sales Rep</th><th>First Contact</th><th>Follow-up</th><th>Outcome</th><th>Deal Value</th><th></th>
+            <th class="sortable" data-sort="name">Name</th><th class="sortable" data-sort="contact">Contact</th><th class="sortable" data-sort="source">Source</th><th class="sortable" data-sort="service">Service</th><th class="sortable" data-sort="sector">Sector</th><th class="sortable" data-sort="salesRep">Sales Rep</th><th class="sortable" data-sort="firstContact">First Contact</th><th class="sortable" data-sort="followUpDate">Follow-up</th><th class="sortable" data-sort="closed">Outcome</th><th class="sortable" data-sort="value">Deal Value</th><th></th>
           </tr>
         </thead>
         <tbody id="leadsTableBody"></tbody>
@@ -271,6 +277,35 @@
     <div class="panel-footer">
       <button type="button" class="btn" id="btnCloseView2">Close</button>
       <button type="button" class="btn btn-primary" id="btnViewEdit">Edit Lead</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="exportOverlay" style="align-items:center;justify-content:center;">
+  <div class="panel" style="width:440px;max-width:100%;height:auto;max-height:88vh;border-left:1px solid var(--border);border-radius:var(--radius);">
+    <div class="panel-head">
+      <h2>Export Report</h2>
+      <button class="close-x" id="btnCloseExport">&times;</button>
+    </div>
+    <div style="padding:20px 22px;overflow-y:auto;">
+      <div class="field">
+        <label>Period</label>
+        <select id="exportPeriod">
+          <option value="">All time</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Fields to include</label>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button type="button" class="btn btn-sm" id="btnExportSelectAll">Select all</button>
+          <button type="button" class="btn btn-sm" id="btnExportSelectNone">Select none</button>
+        </div>
+        <div id="exportFieldList" style="background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;max-height:280px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button type="button" class="btn" id="btnCancelExport">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btnRunExport">Export CSV</button>
     </div>
   </div>
 </div>
@@ -585,9 +620,37 @@
     });
   }
 
+  let leadsSortField = null;
+  let leadsSortDir = 'asc';
+
   function renderLeadsTable(){
     const tbody = document.getElementById('leadsTableBody');
-    const filtered = getFilteredLeads();
+    let filtered = getFilteredLeads();
+
+    if(leadsSortField){
+      filtered = filtered.slice().sort((a,b) => {
+        let av = a[leadsSortField], bv = b[leadsSortField];
+        if(leadsSortField === 'value'){
+          av = a.closed==='Y' ? (Number(a.value)||0) : -1;
+          bv = b.closed==='Y' ? (Number(b.value)||0) : -1;
+          return leadsSortDir === 'asc' ? av - bv : bv - av;
+        }
+        av = (av || '').toString().toLowerCase();
+        bv = (bv || '').toString().toLowerCase();
+        const cmp = av.localeCompare(bv);
+        return leadsSortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    document.querySelectorAll('#view-leads thead th.sortable').forEach(th => {
+      th.classList.toggle('sort-active', th.dataset.sort === leadsSortField);
+      const existingArrow = th.querySelector('.sort-arrow');
+      if(existingArrow) existingArrow.remove();
+      if(th.dataset.sort === leadsSortField){
+        th.insertAdjacentHTML('beforeend', `<span class="sort-arrow">${leadsSortDir === 'asc' ? '↑' : '↓'}</span>`);
+      }
+    });
+
     if(filtered.length === 0){
       tbody.innerHTML = `<tr class="empty-row"><td colspan="11">No leads yet. Click "New Lead" to add one.</td></tr>`;
     } else {
@@ -609,6 +672,18 @@
     }
     document.getElementById('leadsCountNote').textContent = `Showing ${filtered.length} of ${leads.length} lead${leads.length===1?'':'s'}.`;
   }
+
+  document.querySelectorAll('#view-leads thead th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      if(leadsSortField === th.dataset.sort){
+        leadsSortDir = leadsSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        leadsSortField = th.dataset.sort;
+        leadsSortDir = 'asc';
+      }
+      renderLeadsTable();
+    });
+  });
 
   function confirmDelete(id, btnEl){
     if(btnEl.dataset.confirming === '1'){
@@ -1351,18 +1426,22 @@
   function doLogin(){
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
+    const staySignedIn = document.getElementById('loginStaySignedIn').checked;
     const errEl = document.getElementById('loginError');
     const btn = document.getElementById('btnLogin');
     errEl.style.display = 'none';
     if(!email || !password) return;
     btn.disabled = true;
-    auth.signInWithEmailAndPassword(email, password).catch(err => {
-      errEl.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
-        ? 'Incorrect email or password.'
-        : 'Sign-in failed. Please try again.';
-      errEl.style.display = 'block';
-      btn.disabled = false;
-    });
+    const persistence = staySignedIn ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+    auth.setPersistence(persistence)
+      .then(() => auth.signInWithEmailAndPassword(email, password))
+      .catch(err => {
+        errEl.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
+          ? 'Incorrect email or password.'
+          : 'Sign-in failed. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+      });
   }
 
   auth.onAuthStateChanged(user => {
@@ -1375,6 +1454,125 @@
       document.getElementById('appRoot').style.display = 'none';
       document.getElementById('btnLogin').disabled = false;
     }
+  });
+
+  // ---- Export ----
+  const EXPORT_FIELDS = [
+    { key: 'name', label: 'Lead Name' },
+    { key: 'contact', label: 'Contact Number' },
+    { key: 'clientBusiness', label: 'Client (Business)' },
+    { key: 'clientContactPerson', label: 'Client Contact Person' },
+    { key: 'source', label: 'Lead Source' },
+    { key: 'service', label: 'Service' },
+    { key: 'sector', label: 'Sector' },
+    { key: 'salesRep', label: 'Sales Rep' },
+    { key: 'firstContact', label: 'First Contact' },
+    { key: 'meetingDate', label: 'Meeting Date' },
+    { key: 'quoteNumber', label: 'Quote Number' },
+    { key: 'firstCallNotes', label: 'First Call Notes' },
+    { key: 'followUpDate', label: 'Follow-up Date' },
+    { key: 'followUpNote', label: 'Follow-up Note' },
+    { key: 'closedLabel', label: 'Deal Status' },
+    { key: 'value', label: 'Deal Value' },
+    { key: 'createdDate', label: 'Date Created' }
+  ];
+  const DEFAULT_EXPORT_FIELDS = ['name','contact','clientBusiness','source','service','sector','closedLabel','value','createdDate'];
+
+  const exportOverlay = document.getElementById('exportOverlay');
+
+  function monthKeyOf(ts){
+    if(!ts) return null;
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  function populateExportPeriods(){
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const keys = Array.from(new Set(leads.map(l => monthKeyOf(l.createdAt)).filter(Boolean))).sort().reverse();
+    const sel = document.getElementById('exportPeriod');
+    sel.innerHTML = '<option value="">All time</option>' + keys.map(k => {
+      const [y,m] = k.split('-');
+      return `<option value="${k}">${monthNames[Number(m)-1]} ${y}</option>`;
+    }).join('');
+  }
+
+  function renderExportFieldList(){
+    const container = document.getElementById('exportFieldList');
+    container.innerHTML = EXPORT_FIELDS.map(f => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:normal;color:var(--text);cursor:pointer;">
+        <input type="checkbox" class="export-field-cb" value="${f.key}" style="width:auto;" ${DEFAULT_EXPORT_FIELDS.includes(f.key) ? 'checked' : ''}>
+        ${esc(f.label)}
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('btnExportLeads').addEventListener('click', () => {
+    populateExportPeriods();
+    renderExportFieldList();
+    exportOverlay.classList.add('active');
+  });
+  document.getElementById('btnCloseExport').addEventListener('click', () => exportOverlay.classList.remove('active'));
+  document.getElementById('btnCancelExport').addEventListener('click', () => exportOverlay.classList.remove('active'));
+  exportOverlay.addEventListener('click', e => { if(e.target === exportOverlay) exportOverlay.classList.remove('active'); });
+
+  document.getElementById('btnExportSelectAll').addEventListener('click', () => {
+    document.querySelectorAll('.export-field-cb').forEach(cb => cb.checked = true);
+  });
+  document.getElementById('btnExportSelectNone').addEventListener('click', () => {
+    document.querySelectorAll('.export-field-cb').forEach(cb => cb.checked = false);
+  });
+
+  function csvEscape(val){
+    const s = val == null ? '' : String(val);
+    if(/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  document.getElementById('btnRunExport').addEventListener('click', () => {
+    const period = document.getElementById('exportPeriod').value;
+    const selectedKeys = Array.from(document.querySelectorAll('.export-field-cb:checked')).map(cb => cb.value);
+    if(!selectedKeys.length){
+      alert('Please select at least one field to export.');
+      return;
+    }
+
+    let rows = leads.slice();
+    if(period){
+      rows = rows.filter(l => monthKeyOf(l.createdAt) === period);
+    }
+    rows.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+
+    if(!rows.length){
+      alert('No leads found for that period.');
+      return;
+    }
+
+    const fieldMap = Object.fromEntries(EXPORT_FIELDS.map(f => [f.key, f.label]));
+    const getValue = (lead, key) => {
+      if(key === 'closedLabel'){
+        return lead.closed === 'Y' ? 'Closed - Won' : lead.closed === 'N' ? 'Closed - Lost' : 'Pending';
+      }
+      if(key === 'value') return lead.closed === 'Y' ? (Number(lead.value)||0) : '';
+      if(key === 'createdDate') return lead.createdAt ? new Date(lead.createdAt).toISOString().slice(0,10) : '';
+      return lead[key] != null ? lead[key] : '';
+    };
+
+    const header = selectedKeys.map(k => csvEscape(fieldMap[k])).join(',');
+    const body = rows.map(lead => selectedKeys.map(k => csvEscape(getValue(lead, k))).join(',')).join('\n');
+    const csv = header + '\n' + body;
+
+    const monthLabel = period ? period : 'all-time';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `protege-leads-${monthLabel}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    exportOverlay.classList.remove('active');
   });
 })();
 </script>
